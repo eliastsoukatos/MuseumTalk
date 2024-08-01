@@ -13,18 +13,27 @@ api_key = os.getenv("OPENAI_API_KEY")
 # Initialize the OpenAI client with the API key
 client = OpenAI(api_key=api_key)
 
-def analizar_imagen(url_imagen, pregunta):
+def analizar_imagen(url_image, question):
     try:
+        context = ("You are a virtual museum guide that explains the presented images and provides historical"
+                   "context about the artworks shown in the images you are given."
+                   "Keep your answers shorter than 50 words."
+                    "Analyze the image and answer the following question:")
+    
         response = client.chat.completions.create(
-            model="gpt-4o-mini",  # Updated to the correct model name
+            model="gpt-4o-mini", 
             messages=[
+                {
+                    "role": "system",
+                    "content": context
+                },
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": pregunta},
+                        {"type": "text", "text": question},
                         {
                             "type": "image_url",
-                            "image_url": {"url": url_imagen},
+                            "image_url": {"url": url_image},
                         },
                     ],
                 }
@@ -33,7 +42,7 @@ def analizar_imagen(url_imagen, pregunta):
         )
         return response.choices[0].message.content
     except Exception as e:
-        return f"Ocurrió un error: {str(e)}"
+        return f"An error occurred: {str(e)}"
 
 def text_to_speech(text, file_name="speech.mp3"):
     speech_file_path = Path(__file__).parent / file_name
@@ -61,16 +70,16 @@ def play_audio(file_path):
         pygame.time.Clock().tick(10)
 
 def main():
-    url_imagen = input("Por favor, ingresa la URL de la imagen: ")
-    pregunta = input("¿Qué quieres saber sobre esta imagen? ")
+    url_image = input("Please enter the image URL:")
+    question = input("What do you want to know about this image?")
     
-    resultado = analizar_imagen(url_imagen, pregunta)
-    print("\nResultado del análisis:")
-    print(resultado)
+    result = analizar_imagen(url_image, question)
+    print("\nAnalysis result:")
+    print(result)
     
-    audio_file = text_to_speech(resultado)
+    audio_file = text_to_speech(result)
     if not audio_file.startswith("Error"):
-        print(f"\nReproduciendo análisis en audio...")
+        print(f"\nPlaying audio analysis...")
         play_audio(audio_file)
     else:
         print(audio_file)
