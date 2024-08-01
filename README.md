@@ -8,3 +8,6 @@ python -m venv venv
 On macOS and Linux:
 python3 -m venv venv
 source venv/bin/activate
+
+
+pip install -r requirements.txt
