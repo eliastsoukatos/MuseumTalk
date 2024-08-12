@@ -2,12 +2,16 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 from openai import OpenAI
-import pygame
 import pyaudio
 import wave
 import tempfile
 import threading
 import sys
+import io
+import queue
+import simpleaudio as sa
+import time
+from pydub import AudioSegment
 
 # Load environment variables from .env file
 load_dotenv()
@@ -17,6 +21,9 @@ api_key = os.getenv("OPENAI_API_KEY")
 
 # Initialize the OpenAI client with the API key
 client = OpenAI(api_key=api_key)
+
+# Adjust this value (in seconds) to control the timing between chunks
+CHUNK_DELAY = 0.1
 
 def record_audio(filename="question.wav"):
     CHUNK = 1024
@@ -72,14 +79,14 @@ def transcribe_audio(audio_file_path):
         )
     return transcription.text
 
-def analyze_image(url_image, question):
+def analyze_image_stream(url_image, question):
     try:
-        context = ("You are a virtual museum guide that explains the presented images and provides historical"
-                   "context about the artworks shown in the images you are given."
-                   "Keep your answers shorter than 50 words."
-                    "Analyze the image and answer the following question:")
+        context = ("You are a virtual museum guide that explains the presented images and provides historical "
+                   "context about the artworks shown in the images you are given. "
+                   "Keep your answers around 200 words. "
+                   "Analyze the image and answer the following question:")
     
-        response = client.chat.completions.create(
+        stream = client.chat.completions.create(
             model="gpt-4o-mini", 
             messages=[
                 {
@@ -98,35 +105,97 @@ def analyze_image(url_image, question):
                 }
             ],
             max_tokens=300,
+            stream=True,
         )
-        return response.choices[0].message.content
+        return stream
     except Exception as e:
         return f"An error occurred: {str(e)}"
 
-def text_to_speech(text, file_name="speech.mp3"):
-    speech_file_path = Path(__file__).parent / file_name
-    
-    # Check if file exists and delete it
-    if speech_file_path.exists():
-        speech_file_path.unlink()
-    
+def text_to_speech_stream(text):
     try:
         response = client.audio.speech.create(
             model="tts-1",
             voice="alloy",
             input=text
         )
-        response.stream_to_file(speech_file_path)
-        return str(speech_file_path)
+        return response.content
     except Exception as e:
-        return f"Error generating speech: {str(e)}"
+        print(f"Error generating speech: {str(e)}")
+        return None
 
-def play_audio(file_path):
-    pygame.mixer.init()
-    pygame.mixer.music.load(file_path)
-    pygame.mixer.music.play()
-    while pygame.mixer.music.get_busy():
-        pygame.time.Clock().tick(10)
+class AudioPlayer:
+    def __init__(self):
+        self.audio_queue = queue.Queue()
+        self.is_playing = False
+        self.play_obj = None
+
+    def append_audio(self, audio_data):
+        audio = AudioSegment.from_mp3(io.BytesIO(audio_data))
+        audio = audio.set_channels(1)  # Convert to mono
+        audio = audio.set_frame_rate(44100)  # Set sample rate to 44100
+        self.audio_queue.put(audio)
+
+    def play_audio(self):
+        self.is_playing = True
+        while self.is_playing:
+            try:
+                audio = self.audio_queue.get(timeout=1)
+                audio_bytes = audio.raw_data
+                self.play_obj = sa.play_buffer(audio_bytes, 1, 2, 44100)
+                self.play_obj.wait_done()
+            except queue.Empty:
+                time.sleep(0.1)
+            except Exception as e:
+                print(f"Error playing audio: {str(e)}")
+                time.sleep(0.1)
+        print("Audio playback finished.")
+
+    def start_playback(self):
+        if not self.is_playing:
+            threading.Thread(target=self.play_audio, daemon=True).start()
+
+    def stop_playback(self):
+        self.is_playing = False
+        if self.play_obj:
+            self.play_obj.stop()
+
+def process_text_and_audio(text_queue, audio_player):
+    buffer = ""
+    while True:
+        try:
+            text_chunk = text_queue.get(timeout=5)
+            if text_chunk is None:  # End of stream
+                break
+            
+            buffer += text_chunk
+            sentences = buffer.split('.')
+            
+            for sentence in sentences[:-1]:
+                sentence = sentence.strip() + '.'
+                if sentence:
+                    audio_data = text_to_speech_stream(sentence)
+                    if audio_data:
+                        audio_player.append_audio(audio_data)
+                        if not audio_player.is_playing:
+                            audio_player.start_playback()
+            
+            buffer = sentences[-1]
+            
+        except queue.Empty:
+            print("No text data received for 5 seconds, stopping processing.")
+            break
+    
+    # Process any remaining text
+    if buffer:
+        audio_data = text_to_speech_stream(buffer)
+        if audio_data:
+            audio_player.append_audio(audio_data)
+    
+    # Wait for all audio to finish playing
+    while not audio_player.audio_queue.empty() or audio_player.is_playing:
+        time.sleep(0.5)
+    
+    audio_player.stop_playback()
 
 def main():
     url_image = input("Please enter the image URL: ")
@@ -135,16 +204,28 @@ def main():
     question = transcribe_audio(audio_file)
     print(f"Transcribed question: {question}")
     
-    result = analyze_image(url_image, question)
-    print("\nAnalysis result:")
-    print(result)
+    text_stream = analyze_image_stream(url_image, question)
     
-    audio_file = text_to_speech(result)
-    if not audio_file.startswith("Error"):
-        print(f"\nPlaying audio analysis...")
-        play_audio(audio_file)
-    else:
-        print(audio_file)
+    text_queue = queue.Queue()
+    audio_player = AudioPlayer()
+    
+    # Start text processing and TTS thread
+    process_thread = threading.Thread(target=process_text_and_audio, args=(text_queue, audio_player))
+    process_thread.start()
+    
+    print("\nAnalysis result:")
+    try:
+        for chunk in text_stream:
+            if chunk.choices[0].delta.content is not None:
+                text_chunk = chunk.choices[0].delta.content
+                print(text_chunk, end="", flush=True)
+                text_queue.put(text_chunk)
+    except Exception as e:
+        print(f"\nError during text streaming: {str(e)}")
+    finally:
+        text_queue.put(None)  # Signal end of text stream
+    
+    process_thread.join()
 
 if __name__ == "__main__":
     main()
