@@ -34,7 +34,7 @@ const OpenAI = () => {
   };
 
   const analizeImage = async (images: string[], question: string) => {
-    const API_URL = "https://d8b3-81-203-122-60.ngrok-free.app";
+    const API_URL = process.env.EXPO_PUBLIC_API_URL;
     try {
       const prompt = `You are a virtual museum guide that explains the presented images and provides historical context about the artworks shown in the images you are given. Keep your answers shorter than 50 words. Analyze the image and answer the following question:`;
 
@@ -50,7 +50,7 @@ const OpenAI = () => {
         },
       });
 
-      console.log("Chat response 1 ", respose.data);
+      console.log("Chat response  ", respose.data);
 
       return `${API_URL}/audio-stream/${respose.data.task_id}` as string;
     } catch (error) {
