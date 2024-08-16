@@ -34,41 +34,28 @@ const OpenAI = () => {
   };
 
   const analizeImage = async (images: string[], question: string) => {
+    const API_URL = "https://d8b3-81-203-122-60.ngrok-free.app";
     try {
       const prompt = `You are a virtual museum guide that explains the presented images and provides historical context about the artworks shown in the images you are given. Keep your answers shorter than 50 words. Analyze the image and answer the following question:`;
 
       const data = {
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: prompt,
-          },
-          {
-            role: "user",
-            content: [
-              { type: "text", text: question },
-              ...images.map((url) => ({
-                type: "image_url",
-                image_url: { url },
-              })),
-            ],
-          },
-        ],
-        max_tokens: 300,
+        url_images: images,
+        question,
       };
 
-      const respose = await instance.post("/chat/completions", data, {
+      const respose = await axios.post(`${API_URL}/start-processing`, data, {
         headers: {
           "Content-Type": "application/json",
+          "ngrok-skip-browser-warning": "69420",
         },
       });
 
-      console.log("Chat response ", respose.data.choices[0].message.content);
+      console.log("Chat response 1 ", respose.data);
 
-      return respose.data.choices[0].message.content as string;
+      return `${API_URL}/audio-stream/${respose.data.task_id}` as string;
     } catch (error) {
       Alert.alert("Error", "image analize error");
+      console.log(error);
     }
   };
 

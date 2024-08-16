@@ -82,6 +82,7 @@ export default function HomeScreen() {
     setProcessing(true);
     const picture = await cameraRef.current?.takePictureAsync({
       base64: true,
+      quality: 0.03,
     });
     if (picture && picture?.base64) setImages((prev) => [...prev, `data:image/png;base64,${picture.base64}` ?? ""]);
     toggleShowCamera();
@@ -108,9 +109,10 @@ export default function HomeScreen() {
   };
 
   const processAudio = async () => {
+    const t1 = Date.now();
     setProcessing(true);
     try {
-      await sleep(500);
+      await sleep(250);
       await recording?.stopAndUnloadAsync();
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: false,
@@ -122,33 +124,24 @@ export default function HomeScreen() {
         console.log("Transcription: ", data);
         if (data) {
           const description = await analizeImage(images, data);
-          if (description) {
-            const audio = await textToSpeech(description);
-
-            try {
-              const fileUri = FileSystem.cacheDirectory + "audio.mp3";
-              const fileReader = new FileReader();
-              fileReader.onload = async () => {
-                const arrayBuffer = fileReader.result as ArrayBuffer;
-                const base64Data = Buffer.from(arrayBuffer).toString("base64");
-                await FileSystem.writeAsStringAsync(fileUri, base64Data, { encoding: FileSystem.EncodingType.Base64 });
-                try {
-                  const { sound } = await Audio.Sound.createAsync({ uri: fileUri });
-                  await sound.playAsync();
-                } catch (error) {
-                  console.log(error);
-                }
-              };
-              fileReader.readAsArrayBuffer(audio);
-            } catch (error) {
-              Alert.alert("Error", "error processing audio");
-              console.error("Error al reproducir el sonido", error);
-            }
-          }
+          const { sound } = await Audio.Sound.createAsync(
+            {
+              uri: description as string,
+            },
+            {
+              shouldPlay: true,
+            },
+            null,
+            true
+          );
+          await sound.playAsync();
+          const t2 = Date.now();
+          console.log("Processin end", t2 - t1, "ms");
         }
       }
     } catch (error) {
       Alert.alert("Error", "error processing audio");
+      console.log("error", error);
     }
     setProcessing(false);
     recording = undefined;
