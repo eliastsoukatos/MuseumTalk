@@ -82,7 +82,7 @@ export default function HomeScreen() {
     setProcessing(true);
     const picture = await cameraRef.current?.takePictureAsync({
       base64: true,
-      quality: 0.03,
+      quality: 0.8,
     });
     if (picture && picture?.base64) setImages((prev) => [...prev, `data:image/png;base64,${picture.base64}` ?? ""]);
     toggleShowCamera();

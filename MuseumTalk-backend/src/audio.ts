@@ -17,7 +17,7 @@ class AudioGenerationManager {
   }
 
   generate = async (data: any, id: string) => {
-    const prompt = `You are a virtual museum guide that explains the presented images and provides historical context about the artworks shown in the images you are given. Keep your answers shorter than 50 words. Analyze the image and answer the following question:`;
+    const prompt = `You are a virtual museum guide that explains the presented images and provides historical context about the artworks shown in the images you are given. Explain how the artwork was created. Keep your answers around 200 words. Analyze the image and answer the following question:`;
 
     console.log("Image size: ");
     data.url_images.map(async (url: string) => {
@@ -25,15 +25,7 @@ class AudioGenerationManager {
       console.log("Compressed Image size: ", getBase64ImageSizeInMB((await compressBase64Image(url, "jpg", 5)) ?? ""), "mb");
     });
 
-    const images: any = await Promise.all(
-      data.url_images.map(async (url: string) => {
-        const compressedImage = await compressBase64Image(url, "jpg", 5);
-        console.log("Image size: ", getBase64ImageSizeInMB(url), "mb");
-        console.log("Compressed Image size: ", getBase64ImageSizeInMB(compressedImage ?? ""), "mb");
-
-        return compressedImage;
-      })
-    );
+    const images: any = await Promise.all(data.url_images.map(async (url: string) => url));
 
     console.log(
       images.map((url: string) => ({
