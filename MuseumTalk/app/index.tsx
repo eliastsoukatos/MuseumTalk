@@ -82,7 +82,7 @@ export default function HomeScreen() {
     setProcessing(true);
     const picture = await cameraRef.current?.takePictureAsync({
       base64: true,
-      quality: 0.8,
+      quality: 1,
     });
     if (picture && picture?.base64) setImages((prev) => [...prev, `data:image/png;base64,${picture.base64}` ?? ""]);
     toggleShowCamera();
@@ -128,9 +128,7 @@ export default function HomeScreen() {
             {
               uri: description as string,
             },
-            {
-              shouldPlay: true,
-            },
+            {},
             null,
             true
           );
