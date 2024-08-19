@@ -112,7 +112,7 @@ export default function HomeScreen() {
     const t1 = Date.now();
     setProcessing(true);
     try {
-      await sleep(250);
+      await sleep(500);
       await recording?.stopAndUnloadAsync();
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: false,
