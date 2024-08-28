@@ -25,11 +25,44 @@ export default function HomeScreen() {
 
   const [images, setImages] = useState<string[]>([]);
 
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+
   const cameraRef = useRef<CameraView>(null);
 
   useEffect(() => {
     if (!showCamera && cameraIsReady) setCameraIsReady(false);
   }, [showCamera]);
+
+  useEffect(() => {
+    playAudio();
+  }, [sound]);
+
+  const playAudio = async () => {
+    try {
+      console.log("trying to play sound");
+      if (sound) {
+        console.log("start playing sound");
+        await sound.playAsync();
+        setIsPlaying(true);
+      }
+    } catch (error) {
+      console.log(error);
+      Alert.alert("error", "error trying to play audio");
+    }
+  };
+
+  const stopAudio = async () => {
+    try {
+      if (sound) {
+        await sound.unloadAsync();
+        setSound(null);
+        setIsPlaying(false);
+      }
+    } catch (error: any) {
+      setIsPlaying(false);
+    }
+  };
 
   const onCameraReady = () => {
     setCameraIsReady(true);
@@ -124,15 +157,32 @@ export default function HomeScreen() {
         console.log("Transcription: ", data);
         if (data) {
           const description = await analizeImage(images, data);
+          console.log("setting sound", description, "aqui");
           const { sound } = await Audio.Sound.createAsync(
             {
               uri: description as string,
+              headers: {
+                "ngrok-skip-browser-warning": "69420",
+              },
             },
-            {},
-            null,
+            {
+              isLooping: false,
+            },
+            (status) => {
+              if (status.isLoaded) {
+                if ((status?.playableDurationMillis ?? 0) > 0) {
+                  console.log("PLAYING", status?.playableDurationMillis);
+                } else {
+                  console.log("JUST FINISH");
+                  stopAudio();
+                }
+              }
+            },
             true
           );
-          await sound.playAsync();
+
+          setSound(sound);
+
           const t2 = Date.now();
           console.log("Processin end", t2 - t1, "ms");
         }
@@ -187,7 +237,7 @@ export default function HomeScreen() {
           />
 
           <View style={[styles.buttonContainer, { width }]}>
-            <Button onPress={resetImages} title="reset" />
+            {!isPlaying ? <Button onPress={resetImages} title="reset" /> : <Button onPress={stopAudio} title="stop" />}
             <Button onPress={toggleShowCamera} title="Take A Picture" />
             {images.length ? <Button onPressIn={recordAudio} onPressOut={processAudio} title="Ask something" /> : null}
           </View>

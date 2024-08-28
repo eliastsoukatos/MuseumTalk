@@ -18,20 +18,12 @@ class AudioGenerationManager {
 
   generate = async (data: any, id: string) => {
     const prompt = `You are a virtual museum guide that explains the presented images and provides historical context about the artworks shown in the images you are given. Explain how the artwork was created. Keep your answers around 200 words. Analyze the image and answer the following question:`;
+    const images: any = await Promise.all(
+      data.url_images.map(async (url: string) => {
+        const compressedImage = await compressBase64Image(url, "jpg", 85);
 
-    console.log("Image size: ");
-    data.url_images.map(async (url: string) => {
-      console.log("Image size: ", getBase64ImageSizeInMB(url), "mb");
-      console.log("Compressed Image size: ", getBase64ImageSizeInMB((await compressBase64Image(url, "jpg", 5)) ?? ""), "mb");
-    });
-
-    const images: any = await Promise.all(data.url_images.map(async (url: string) => url));
-
-    console.log(
-      images.map((url: string) => ({
-        type: "image_url",
-        image_url: { url },
-      }))
+        return compressedImage;
+      })
     );
 
     const completion = await this.openai.chat.completions.create({
@@ -67,7 +59,6 @@ class AudioGenerationManager {
   };
 
   createAudio = async (text: string, id: string) => {
-    console.log("creating audio for: ", text);
     const response = await this.openai.audio.speech.create({
       model: "tts-1",
       voice: "alloy",
@@ -75,8 +66,6 @@ class AudioGenerationManager {
     });
 
     this.audioTranscodeStream.get(id)?.write(Buffer.from(await response.arrayBuffer()));
-
-    console.log("audio sended to transcode");
   };
 
   transcodeAudio = async (id: string) => {
@@ -84,7 +73,6 @@ class AudioGenerationManager {
 
     if (!audios) return;
     for await (const chunk of audios) {
-      console.log("transcoding audio");
       await new Promise((resolve, reject) => {
         ffmpeg(arrayBufferToStream(chunk))
           .audioCodec("libmp3lame")
@@ -92,7 +80,6 @@ class AudioGenerationManager {
           .on("end", resolve)
           .pipe(this.audioStream.get(id), { end: false });
       });
-      console.log("audio created");
     }
   };
 }

@@ -1,6 +1,7 @@
 import { Readable } from "stream";
 import sharp, { FormatEnum } from "sharp";
-
+import fs from "fs";
+import { Job, scheduleJob } from "node-schedule";
 export function arrayBufferToStream(arrayBuffer: ArrayBuffer) {
   const buffer = Buffer.from(arrayBuffer);
   const stream = new Readable();
@@ -42,3 +43,18 @@ export const compressBase64Image = async (base64Image: string, outputFormat: key
     return null;
   }
 };
+
+export class JobScheduler {
+  static deleteFile(path: string) {
+    const min = 5 * 60;
+    const mill = min * 1000;
+    scheduleJob(`delete:${path}`, Date.now() + mill, () => {
+      fs.unlink(path, (err) => {
+        if (err) {
+          console.log(`error deleting audio file ${path}`, err);
+        }
+        console.log(`audio file ${path} deleted`);
+      });
+    });
+  }
+}
